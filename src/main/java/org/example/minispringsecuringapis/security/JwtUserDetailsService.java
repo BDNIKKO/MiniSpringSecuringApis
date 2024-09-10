@@ -1,45 +1,47 @@
 package org.example.minispringsecuringapis.security;
 
+import org.example.minispringsecuringapis.model.User;
+import org.example.minispringsecuringapis.repository.UserRepository;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.util.concurrent.ConcurrentHashMap;
-
 @Service
 public class JwtUserDetailsService implements UserDetailsService {
 
-    private final ConcurrentHashMap<String, UserDetails> users = new ConcurrentHashMap<>();
+    private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    // Constructor injection for PasswordEncoder
-    public JwtUserDetailsService(PasswordEncoder passwordEncoder) {
+    public JwtUserDetailsService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+        this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        UserDetails user = users.get(username);
+        User user = userRepository.findByUsername(username);
         if (user == null) {
             throw new UsernameNotFoundException("User not found: " + username);
         }
-        return user;
+
+        return org.springframework.security.core.userdetails.User.withUsername(user.getUsername())
+                .password(user.getPassword())
+                .authorities(user.getRoles())
+                .build();
     }
 
-    // Method to save a user with an encoded password
     public void saveUser(String username, UserDetails userDetails, boolean isPasswordRaw) {
-        // Encode the password only if it's raw (i.e., not already hashed)
         String passwordToSave = isPasswordRaw
                 ? passwordEncoder.encode(userDetails.getPassword())
                 : userDetails.getPassword();
 
-        UserDetails encodedUser = org.springframework.security.core.userdetails.User.withUsername(userDetails.getUsername())
-                .password(passwordToSave)
-                .authorities(userDetails.getAuthorities())
-                .build();
+        User newUser = new User();
+        newUser.setUsername(username);
+        newUser.setPassword(passwordToSave);
+        newUser.setRoles(userDetails.getAuthorities().toString());
 
-        users.put(username, encodedUser);
+        userRepository.save(newUser);
     }
 }
