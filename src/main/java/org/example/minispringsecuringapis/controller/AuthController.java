@@ -11,6 +11,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,13 +25,15 @@ public class AuthController {
     private final AuthenticationManager authenticationManager;
     private final JwtUserDetailsService userDetailsService;
     private final JwtTokenUtil jwtTokenUtil;
+    private final PasswordEncoder passwordEncoder;
 
     @Autowired
     public AuthController(AuthenticationManager authenticationManager, JwtUserDetailsService userDetailsService,
-                          JwtTokenUtil jwtTokenUtil) {
+                          JwtTokenUtil jwtTokenUtil, PasswordEncoder passwordEncoder) {
         this.authenticationManager = authenticationManager;
         this.userDetailsService = userDetailsService;
         this.jwtTokenUtil = jwtTokenUtil;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @PostMapping("/login")
@@ -53,18 +56,24 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<String>> registerUser(@Valid @RequestBody AuthenticationRequest authenticationRequest) {
         // Check if user already exists
+        UserDetails existingUser;
         try {
-            userDetailsService.loadUserByUsername(authenticationRequest.getUsername());
+            existingUser = userDetailsService.loadUserByUsername(authenticationRequest.getUsername());
             return ResponseEntity.badRequest().body(new ApiResponse<>("User already exists", null));
         } catch (Exception e) {
             // If user is not found, proceed with registration
             UserDetails userDetails = org.springframework.security.core.userdetails.User.withUsername(authenticationRequest.getUsername())
-                    .password(authenticationRequest.getPassword())  // Password encoding now happens in JwtUserDetailsService
+                    .password(passwordEncoder.encode(authenticationRequest.getPassword()))  // Use PasswordEncoder to encode the password
                     .authorities(Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER")))  // Assign default role "ROLE_USER"
                     .build();
 
-            userDetailsService.saveUser(authenticationRequest.getUsername(), userDetails, true);  // Assuming `saveUser` was updated
+            userDetailsService.saveUser(authenticationRequest.getUsername(), userDetails, true); // updated to include boolean parameter
             return ResponseEntity.ok(new ApiResponse<>("User registered successfully", "Success"));
         }
+    }
+
+    @GetMapping("/protected")
+    public ResponseEntity<String> getProtectedData() {
+        return ResponseEntity.ok("This is a protected endpoint. Only authenticated users can see this.");
     }
 }

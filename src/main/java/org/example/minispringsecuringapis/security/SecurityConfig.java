@@ -25,18 +25,20 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(AbstractHttpConfigurer::disable)  // Disable CSRF in the modern way
+                .csrf(AbstractHttpConfigurer::disable)  // Disable CSRF
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/register", "/api/login").permitAll()  // Allow these endpoints without authentication
-                        .requestMatchers("/h2-console/**").permitAll()  // Allow H2 console access
-                        .anyRequest().authenticated()  // All other requests require authentication
+                        .requestMatchers("/api/register", "/api/login").permitAll()  // Allow register and login without auth
+                        .requestMatchers("/api/protected").hasAnyRole("USER", "ADMIN")  // Protect this endpoint for logged-in users
+                        .requestMatchers("/h2-console/**").permitAll()  // Allow access to the H2 console
+                        .anyRequest().authenticated()  // Other requests need authentication
                 )
-                .headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin)) // Enable H2 console
+                .headers(headers -> headers
+                        .frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin)  // Allow H2 console to be embedded in a frame (same-origin)
+                )
                 .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)  // Stateless sessions for JWT
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)  // JWT is stateless
                 );
 
-        // Add JWT filter before UsernamePasswordAuthenticationFilter
         http.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -49,6 +51,6 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();  // BCryptPasswordEncoder to encode passwords
+        return new BCryptPasswordEncoder();  // Password encoder for user registration
     }
 }
